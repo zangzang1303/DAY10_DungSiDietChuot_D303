@@ -1,7 +1,7 @@
 {
   "backend": "chroma",
   "embedding_model": "sentence-transformers/all-MiniLM-L6-v2",
-  "persist_path": "D:\\CODE\\AITHUCCHIEN\\LADS\\DAY10_DungSiDietChuot_D303\\data\\chroma",
+  "persist_path": "D:\\AI_In_Action\\Codelabs\\DAY10_DungSiDietChuot_D303\\data\\chroma",
   "collection_name": "papers-baseline",
   "documents": [
     {
