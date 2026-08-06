@@ -47,15 +47,15 @@ Crossref API
 
 ### Trách nhiệm của từng khối
 
-| Khối              | Input                            | Xử lý chính                                                                                           | Output/artifact                                      | Owner                 |
-| ----------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | --------------------- |
-| Ingestion         | Crossref API                     | Fetch dữ liệu, retry khi lỗi, parse response thành records                                            | `data/raw/`                                          | Bùi Thọ An            |
-| Cleaning          | Raw records                      | Chuẩn hóa title, summary, published date, authors, categories; tạo `text_for_embedding` và `age_days` | `data/clean/`                                        | Bùi Thọ An            |
-| Embedding/index   | Clean dataset                    | Tạo embedding, build ChromaDB collection, lưu index/manifest                                          | `data/embeddings/` hoặc ChromaDB storage             | Lê Tuấn Cảnh          |
-| Evaluation        | Clean dataset + test set + index | Chạy retrieval, sinh câu trả lời, tính retrieval hit rate, token F1 hoặc judge score                  | `data/results/`                                      | [Họ tên thành viên 2] |
-| Observability     | Clean/corrupted/repaired dataset | Kiểm tra completeness, validity, duplicates, freshness                                                | `data/quality/`                                      | Lê Tuấn Cảnh          |
-| Corruption/repair | Clean dataset + raw snapshot     | Gây lỗi có kiểm soát, repair từ raw artifacts, rebuild dataset/index                                  | `data/results/corruption_log.json`, repaired dataset | Lê Tuấn Cảnh          |
-| Orchestration     | Các module pipeline              | Chạy baseline, corrupted, repaired theo đúng thứ tự                                                   | Reports/metrics                                      | Lê Tuấn Cảnh          |
+| Khối              | Input                            | Xử lý chính                                                                                           | Output/artifact                                      | Owner        |
+| ----------------- | -------------------------------- | ----------------------------------------------------------------------------------------------------- | ---------------------------------------------------- | ------------ |
+| Ingestion         | Crossref API                     | Fetch dữ liệu, retry khi lỗi, parse response thành records                                            | `data/raw/`                                          | Bùi Thọ An   |
+| Cleaning          | Raw records                      | Chuẩn hóa title, summary, published date, authors, categories; tạo `text_for_embedding` và `age_days` | `data/clean/`                                        | Bùi Thọ An   |
+| Embedding/index   | Clean dataset                    | Tạo embedding, build ChromaDB collection, lưu index/manifest                                          | `data/embeddings/` hoặc ChromaDB storage             | Lê Tuấn Cảnh |
+| Evaluation        | Clean dataset + test set + index | Chạy retrieval, sinh câu trả lời, tính retrieval hit rate, token F1 hoặc judge score                  | `data/results/`                                      | Lê Tuấn Cảnh |
+| Observability     | Clean/corrupted/repaired dataset | Kiểm tra completeness, validity, duplicates, freshness                                                | `data/quality/`                                      | Lê Tuấn Cảnh |
+| Corruption/repair | Clean dataset + raw snapshot     | Gây lỗi có kiểm soát, repair từ raw artifacts, rebuild dataset/index                                  | `data/results/corruption_log.json`, repaired dataset | Lê Tuấn Cảnh |
+| Orchestration     | Các module pipeline              | Chạy baseline, corrupted, repaired theo đúng thứ tự                                                   | Reports/metrics                                      | Lê Tuấn Cảnh |
 
 ## 4. Cách tái hiện kết quả
 
