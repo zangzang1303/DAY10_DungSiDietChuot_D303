@@ -1,45 +1,93 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
-from core.utils import write_json, normalize_whitespace
+from core.utils import normalize_whitespace, read_json, write_json
+
+
+def _clean(value: Any) -> str:
+    if value is None:
+        return ""
+    if pd.isna(value):
+        return ""
+    return str(value).strip()
 
 
 def _rebuild_text_for_embedding(row: pd.Series) -> str:
-    title = str(row.get("title", "") or "").strip()
-    summary = str(row.get("summary", "") or "").strip()
-    authors = str(row.get("authors_joined", "") or "").strip()
-    categories = str(row.get("categories_joined", "") or "").strip()
-    published = str(row.get("published", "") or "").strip()
+    title = _clean(row.get("title", ""))
+    summary = _clean(row.get("summary", ""))
+    authors = _clean(row.get("authors_joined", ""))
+    categories = _clean(row.get("categories_joined", ""))
+    published = _clean(row.get("published", ""))
 
-    text = f"""
-Title: {title}
-Summary: {summary}
-Authors: {authors}
-Categories: {categories}
-Published: {published}
-""".strip()
+    return normalize_whitespace(
+        f"""
+        Title: {title}
+        Summary: {summary}
+        Authors: {authors}
+        Categories: {categories}
+        Published: {published}
+        """
+    )
 
-    return normalize_whitespace(text)
+
+def _load_test_doc_ids(output_log_path: Path) -> set[str]:
+    """
+    output_log_path usually is data/results/corruption_log.json.
+    From that path, infer data/eval/test_set.json.
+    """
+    data_dir = output_log_path.parent.parent
+    test_set_path = data_dir / "eval" / "test_set.json"
+
+    if not test_set_path.exists():
+        return set()
+
+    test_set = read_json(test_set_path)
+    ids: set[str] = set()
+
+    for item in test_set:
+        for doc_id in item.get("ground_truth_doc_ids", []):
+            ids.add(str(doc_id))
+
+    return ids
+
+
+def _target_indices(df: pd.DataFrame, output_log_path: Path) -> list[int]:
+    """
+    Prefer rows whose paper_id appears in the frozen evaluation set.
+    Fallback to first rows if test set is missing.
+    """
+    if "paper_id" not in df.columns:
+        return list(df.index[: min(6, len(df))])
+
+    test_doc_ids = _load_test_doc_ids(output_log_path)
+    if test_doc_ids:
+        mask = df["paper_id"].astype(str).isin(test_doc_ids)
+        indices = df[mask].index.tolist()
+        if indices:
+            return indices
+
+    return list(df.index[: min(6, len(df))])
 
 
 def corrupt_clean_dataframe(df: pd.DataFrame, output_log_path) -> pd.DataFrame:
     """
     Simulate controlled data corruption.
 
-    Corruptions:
-    1. Drop some latest records.
-    2. Blank summary in some rows.
-    3. Inject noise into text.
-    4. Truncate title.
-    5. Make published date stale.
-    6. Add duplicate rows.
-    7. Rebuild text_for_embedding.
-    8. Write corruption log.
+    Scenarios:
+    1. Blank summary on evaluation-related documents.
+    2. Make published date stale.
+    3. Add duplicate rows with same paper_id.
+    4. Inject unrelated noise into text_for_embedding.
+    5. Rebuild text_for_embedding after changed fields.
+    6. Write detailed corruption log.
     """
+    output_log_path = Path(output_log_path)
+
     if df.empty:
         log = {
             "generated_at": datetime.now(UTC).isoformat(),
@@ -53,91 +101,41 @@ def corrupt_clean_dataframe(df: pd.DataFrame, output_log_path) -> pd.DataFrame:
 
     corrupted = df.copy().reset_index(drop=True)
     input_rows = int(len(corrupted))
+    targets = _target_indices(corrupted, output_log_path)
+
+    if not targets:
+        targets = list(corrupted.index[: min(6, len(corrupted))])
+
     events: list[dict[str, Any]] = []
 
-    # Use fixed fractions to make the corruption repeatable.
-    n_drop = max(1, int(input_rows * 0.10)) if input_rows >= 8 else 0
-    n_blank = max(1, int(input_rows * 0.25))
-    n_noise = max(1, int(input_rows * 0.20))
-    n_truncate = max(1, int(input_rows * 0.15))
-    n_stale = max(1, int(input_rows * 0.20))
-    n_duplicate = max(1, int(input_rows * 0.10)) if input_rows >= 5 else 0
+    def affected_ids(indices: list[int]) -> list[str]:
+        if "paper_id" not in corrupted.columns:
+            return []
+        return corrupted.loc[indices, "paper_id"].astype(str).tolist()
 
-    # 1. Drop latest records based on age_days ascending.
-    if n_drop > 0 and "age_days" in corrupted.columns:
-        age_values = pd.to_numeric(corrupted["age_days"], errors="coerce")
-        drop_indices = age_values.sort_values(na_position="last").head(n_drop).index.tolist()
-        dropped_ids = corrupted.loc[drop_indices, "paper_id"].astype(str).tolist() if "paper_id" in corrupted.columns else []
-        corrupted = corrupted.drop(index=drop_indices).reset_index(drop=True)
-        events.append(
-            {
-                "type": "drop_latest_records",
-                "affected_rows": len(drop_indices),
-                "affected_paper_ids": dropped_ids,
-                "description": "Dropped records with the smallest age_days to simulate missing recent papers.",
-            }
-        )
+    # Chia target docs cho nhiều kịch bản. Vì test_set của bạn có 8 samples,
+    # thường targets sẽ là 2-6 paper đại diện.
+    blank_indices = targets[: max(1, len(targets) // 2)]
+    stale_indices = targets[max(1, len(targets) // 2):] or targets[-1:]
+    noise_indices = targets
+    duplicate_indices = targets[: max(1, min(3, len(targets)))]
 
-    # Recompute row count after drop.
-    current_rows = int(len(corrupted))
-
-    # 2. Blank summary.
-    if "summary" in corrupted.columns and current_rows > 0:
-        blank_indices = corrupted.index[: min(n_blank, current_rows)].tolist()
-        affected_ids = corrupted.loc[blank_indices, "paper_id"].astype(str).tolist() if "paper_id" in corrupted.columns else []
+    # 1. Blank Summary
+    if "summary" in corrupted.columns:
         corrupted.loc[blank_indices, "summary"] = ""
         events.append(
             {
                 "type": "blank_summary",
                 "affected_rows": len(blank_indices),
-                "affected_paper_ids": affected_ids,
-                "description": "Blanked summary/abstract to reduce completeness and semantic content.",
+                "affected_paper_ids": affected_ids(blank_indices),
+                "description": "Blanked summary for documents that overlap with the frozen evaluation set.",
             }
         )
 
-    # 3. Inject noise into summary.
-    if "summary" in corrupted.columns and current_rows > 0:
-        noise_start = min(n_blank, current_rows)
-        noise_end = min(noise_start + n_noise, current_rows)
-        noise_indices = corrupted.index[noise_start:noise_end].tolist()
-        affected_ids = corrupted.loc[noise_indices, "paper_id"].astype(str).tolist() if "paper_id" in corrupted.columns else []
-        for idx in noise_indices:
-            corrupted.at[idx, "summary"] = f"{corrupted.at[idx, 'summary']} NOISE_TOKEN NOISE_TOKEN unrelated corrupted text"
-        events.append(
-            {
-                "type": "inject_noise",
-                "affected_rows": len(noise_indices),
-                "affected_paper_ids": affected_ids,
-                "description": "Injected unrelated tokens into summary to weaken embedding quality.",
-            }
-        )
-
-    # 4. Truncate title.
-    if "title" in corrupted.columns and current_rows > 0:
-        truncate_start = min(n_blank + n_noise, current_rows)
-        truncate_end = min(truncate_start + n_truncate, current_rows)
-        truncate_indices = corrupted.index[truncate_start:truncate_end].tolist()
-        affected_ids = corrupted.loc[truncate_indices, "paper_id"].astype(str).tolist() if "paper_id" in corrupted.columns else []
-        for idx in truncate_indices:
-            title = str(corrupted.at[idx, "title"])
-            corrupted.at[idx, "title"] = title[: max(8, min(20, len(title)))]
-        events.append(
-            {
-                "type": "truncate_title",
-                "affected_rows": len(truncate_indices),
-                "affected_paper_ids": affected_ids,
-                "description": "Truncated titles to simulate partial text corruption.",
-            }
-        )
-
-    # 5. Make published date stale.
-    if "published" in corrupted.columns and current_rows > 0:
-        stale_start = min(n_blank + n_noise + n_truncate, current_rows)
-        stale_end = min(stale_start + n_stale, current_rows)
-        stale_indices = corrupted.index[stale_start:stale_end].tolist()
-        affected_ids = corrupted.loc[stale_indices, "paper_id"].astype(str).tolist() if "paper_id" in corrupted.columns else []
-
+    # 2. Stale Date
+    if "published" in corrupted.columns:
         corrupted.loc[stale_indices, "published"] = "2000-01-01"
+
         if "age_days" in corrupted.columns:
             today = datetime.now(UTC).date()
             stale_age = (today - datetime(2000, 1, 1).date()).days
@@ -145,36 +143,67 @@ def corrupt_clean_dataframe(df: pd.DataFrame, output_log_path) -> pd.DataFrame:
 
         events.append(
             {
-                "type": "make_published_stale",
+                "type": "stale_date",
                 "affected_rows": len(stale_indices),
-                "affected_paper_ids": affected_ids,
-                "description": "Changed published date to an old date to simulate stale data.",
+                "affected_paper_ids": affected_ids(stale_indices),
+                "description": "Changed published date to 2000-01-01 to simulate stale records.",
             }
         )
 
-    # 6. Add duplicate rows.
-    if n_duplicate > 0 and current_rows > 0:
-        duplicate_rows = corrupted.head(min(n_duplicate, current_rows)).copy()
-        corrupted = pd.concat([corrupted, duplicate_rows], ignore_index=True)
-        affected_ids = duplicate_rows["paper_id"].astype(str).tolist() if "paper_id" in duplicate_rows.columns else []
+    # 3. Add Noise
+    if "text_for_embedding" in corrupted.columns:
+        for idx in noise_indices:
+            old_text = _clean(corrupted.at[idx, "text_for_embedding"])
+            corrupted.at[idx, "text_for_embedding"] = normalize_whitespace(
+                old_text
+                + " RANDOM_NOISE_TOKEN unrelated unrelated corrupted corrupted misleading content"
+            )
+
         events.append(
             {
-                "type": "add_duplicate_rows",
-                "affected_rows": int(len(duplicate_rows)),
-                "affected_paper_ids": affected_ids,
-                "description": "Duplicated records to violate uniqueness.",
+                "type": "add_noise",
+                "affected_rows": len(noise_indices),
+                "affected_paper_ids": affected_ids(noise_indices),
+                "description": "Injected unrelated noise into text_for_embedding for evaluation-related papers.",
             }
         )
 
-    # 7. Rebuild text_for_embedding.
+    # 4. Duplicates
+    duplicate_rows = corrupted.loc[duplicate_indices].copy()
+    corrupted = pd.concat([corrupted, duplicate_rows], ignore_index=True)
+
+    events.append(
+        {
+            "type": "duplicate_rows",
+            "affected_rows": int(len(duplicate_rows)),
+            "affected_paper_ids": duplicate_rows["paper_id"].astype(str).tolist()
+            if "paper_id" in duplicate_rows.columns
+            else [],
+            "description": "Duplicated records while keeping the same paper_id to violate uniqueness.",
+        }
+    )
+
+    # 5. Rebuild text_for_embedding from corrupted fields, then keep noise appended.
     if "text_for_embedding" in corrupted.columns:
         corrupted["text_for_embedding"] = corrupted.apply(_rebuild_text_for_embedding, axis=1)
+
+        # Add noise again after rebuild so retrieval content is actually noisy.
+        for idx in noise_indices:
+            if idx < len(corrupted):
+                corrupted.at[idx, "text_for_embedding"] = normalize_whitespace(
+                    _clean(corrupted.at[idx, "text_for_embedding"])
+                    + " RANDOM_NOISE_TOKEN unrelated unrelated corrupted corrupted misleading content"
+                )
 
     log = {
         "generated_at": datetime.now(UTC).isoformat(),
         "input_rows": input_rows,
         "output_rows": int(len(corrupted)),
+        "test_doc_ids_targeted": list(_load_test_doc_ids(output_log_path)),
+        "target_indices": [int(i) for i in targets],
+        "target_paper_ids": affected_ids(targets),
         "events": events,
     }
+
     write_json(output_log_path, log)
     return corrupted

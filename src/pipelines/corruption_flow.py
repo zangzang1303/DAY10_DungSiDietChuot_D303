@@ -75,19 +75,6 @@ def _build_index_and_evaluate(
 
 
 def main() -> None:
-    """
-    Corruption flow end-to-end.
-
-    Steps:
-    1. Load baseline metrics and clean dataset.
-    2. Create corrupted dataframe.
-    3. Save corrupted artifacts.
-    4. Rebuild index and evaluate corrupted data.
-    5. Run quality/freshness on corrupted data.
-    6. Repair from saved raw records.
-    7. Evaluate repaired dataset.
-    8. Create comparison report.
-    """
     settings = load_settings()
     require_llm_credentials(settings)
 
@@ -178,6 +165,7 @@ def main() -> None:
     )
 
     print("\n[corruption_flow] Corruption flow completed.")
+    print(f"[corruption_flow] Corrupted CSV: {settings.paths.corrupted_clean_csv}")
     print(f"[corruption_flow] Corruption log: {settings.paths.corruption_log}")
     print(f"[corruption_flow] Corrupted metrics: {settings.paths.corrupted_metrics}")
     print(f"[corruption_flow] Repaired metrics: {settings.paths.repaired_metrics}")
