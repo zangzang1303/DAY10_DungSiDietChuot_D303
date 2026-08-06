@@ -1,70 +1,84 @@
 {
-  "generated_at": "2026-08-06T03:37:36.386477+00:00",
+  "generated_at": "2026-08-06T03:46:32.572595+00:00",
   "input_rows": 24,
-  "output_rows": 24,
+  "output_rows": 27,
+  "test_doc_ids_targeted": [
+    "10.1007/s10278-026-02086-9",
+    "10.2118/234689-pa",
+    "10.21203/rs.3.rs-10012178/v1",
+    "10.3390/buildings16132637",
+    "10.21079/11681/50309",
+    "10.1111/exsy.70341",
+    "10.21203/rs.3.rs-10178277/v1",
+    "10.63646/kpqm1958"
+  ],
+  "target_indices": [
+    0,
+    1,
+    2,
+    3,
+    5,
+    6,
+    7,
+    8
+  ],
+  "target_paper_ids": [
+    "10.1111/exsy.70341",
+    "10.2118/234689-pa",
+    "10.1007/s10278-026-02086-9",
+    "10.21203/rs.3.rs-10178277/v1",
+    "10.3390/buildings16132637",
+    "10.21079/11681/50309",
+    "10.63646/kpqm1958",
+    "10.21203/rs.3.rs-10012178/v1"
+  ],
   "events": [
     {
-      "type": "drop_latest_records",
-      "affected_rows": 2,
+      "type": "blank_summary",
+      "affected_rows": 4,
       "affected_paper_ids": [
         "10.1111/exsy.70341",
-        "10.2118/234689-pa"
-      ],
-      "description": "Dropped records with the smallest age_days to simulate missing recent papers."
-    },
-    {
-      "type": "blank_summary",
-      "affected_rows": 6,
-      "affected_paper_ids": [
-        "10.1007/s10278-026-02086-9",
-        "10.21203/rs.3.rs-10178277/v1",
-        "10.2196/preprints.106157",
-        "10.3390/buildings16132637",
-        "10.21079/11681/50309",
-        "10.63646/kpqm1958"
-      ],
-      "description": "Blanked summary/abstract to reduce completeness and semantic content."
-    },
-    {
-      "type": "inject_noise",
-      "affected_rows": 4,
-      "affected_paper_ids": [
-        "10.21203/rs.3.rs-10012178/v1",
-        "10.47576/2949-1894.2026.7.7.023",
-        "10.21203/rs.3.rs-9882260/v1",
-        "10.52060/juptik.v4i1.4318"
-      ],
-      "description": "Injected unrelated tokens into summary to weaken embedding quality."
-    },
-    {
-      "type": "truncate_title",
-      "affected_rows": 3,
-      "affected_paper_ids": [
-        "10.54254/2753-8818/2026.dl34055",
-        "10.22214/ijraset.2026.82233",
-        "10.21203/rs.3.rs-9770645/v1"
-      ],
-      "description": "Truncated titles to simulate partial text corruption."
-    },
-    {
-      "type": "make_published_stale",
-      "affected_rows": 4,
-      "affected_paper_ids": [
-        "10.1093/sleep/zsag091.0346",
-        "10.32473/flairs.39.1.141782",
-        "10.55041/isjem07213",
-        "10.20944/preprints202604.0339.v1"
-      ],
-      "description": "Changed published date to an old date to simulate stale data."
-    },
-    {
-      "type": "add_duplicate_rows",
-      "affected_rows": 2,
-      "affected_paper_ids": [
+        "10.2118/234689-pa",
         "10.1007/s10278-026-02086-9",
         "10.21203/rs.3.rs-10178277/v1"
       ],
-      "description": "Duplicated records to violate uniqueness."
+      "description": "Blanked summary for documents that overlap with the frozen evaluation set."
+    },
+    {
+      "type": "stale_date",
+      "affected_rows": 4,
+      "affected_paper_ids": [
+        "10.3390/buildings16132637",
+        "10.21079/11681/50309",
+        "10.63646/kpqm1958",
+        "10.21203/rs.3.rs-10012178/v1"
+      ],
+      "description": "Changed published date to 2000-01-01 to simulate stale records."
+    },
+    {
+      "type": "add_noise",
+      "affected_rows": 8,
+      "affected_paper_ids": [
+        "10.1111/exsy.70341",
+        "10.2118/234689-pa",
+        "10.1007/s10278-026-02086-9",
+        "10.21203/rs.3.rs-10178277/v1",
+        "10.3390/buildings16132637",
+        "10.21079/11681/50309",
+        "10.63646/kpqm1958",
+        "10.21203/rs.3.rs-10012178/v1"
+      ],
+      "description": "Injected unrelated noise into text_for_embedding for evaluation-related papers."
+    },
+    {
+      "type": "duplicate_rows",
+      "affected_rows": 3,
+      "affected_paper_ids": [
+        "10.1111/exsy.70341",
+        "10.2118/234689-pa",
+        "10.1007/s10278-026-02086-9"
+      ],
+      "description": "Duplicated records while keeping the same paper_id to violate uniqueness."
     }
   ]
 }
