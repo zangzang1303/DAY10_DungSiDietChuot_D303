@@ -12,10 +12,6 @@ from pydantic import BaseModel, Field
 
 from core.config import Settings
 from core.utils import normalize_whitespace, read_json, write_json
-from retrieval.embeddings import MiniLMEmbeddings
-from retrieval.index import LocalEmbeddingIndex
-from retrieval.llm import build_llm
-from retrieval.qa import answer_question
 
 
 class JudgeVerdict(BaseModel):
@@ -46,6 +42,8 @@ def _token_f1(reference: str, prediction: str) -> float:
 
 
 def _judge_answer(settings: Settings, question: str, reference: str, prediction: str) -> JudgeVerdict:
+    from retrieval.llm import build_llm
+
     prompt = f"""
 Evaluate the model answer against the reference answer.
 
@@ -74,6 +72,9 @@ def _run_ragas(settings: Settings, answers: list[dict[str, Any]]) -> dict[str, A
     if os.getenv("RUN_RAGAS", "").lower() not in {"1", "true", "yes"}:
         return {"skipped": "Set RUN_RAGAS=1 to enable the slower Ragas pass."}
     try:
+        from retrieval.embeddings import MiniLMEmbeddings
+        from retrieval.llm import build_llm
+
         if "langchain_community.chat_models.vertexai" not in sys.modules:
             shim = types.ModuleType("langchain_community.chat_models.vertexai")
             shim.ChatVertexAI = type("ChatVertexAI", (), {})
@@ -102,11 +103,13 @@ def _run_ragas(settings: Settings, answers: list[dict[str, Any]]) -> dict[str, A
 
 def evaluate_pipeline(
     settings: Settings,
-    index: LocalEmbeddingIndex,
-    test_set_path,
-    metrics_output_path,
-    answers_output_path,
+    index: Any,
+    test_set_path: Any,
+    metrics_output_path: Any,
+    answers_output_path: Any,
 ) -> EvaluationBundle:
+    from retrieval.qa import answer_question
+
     test_set = read_json(test_set_path)
     answers: list[dict[str, Any]] = []
 
